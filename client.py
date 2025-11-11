@@ -1,3 +1,5 @@
+from config import SERVER_HOST, SERVER_PORT
+
 import sys
 import socket
 import threading
@@ -11,7 +13,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QDialog, QVBoxLayout,
 from PySide6.QtCore import QObject, Signal, Slot, QTimer, Qt
 from PySide6.QtGui import QFont
 
-from chat_framework import ChatWidget
+from chat_framework import ChatWidget, QuestionGeneratorWorker, AnswerEvaluatorWorker
 import style
 
 
@@ -20,6 +22,9 @@ class MessageType(Enum):
     STATUS = 'status'
     SYSTEM = 'system'
     REGISTER = 'register'
+    QUESTION = 'question'
+    DUEL_REQUEST = 'duel_request'
+    DUEL_SCORE = 'duel_score'
 
 
 class SelectionDialog(QDialog):
@@ -34,6 +39,7 @@ class SelectionDialog(QDialog):
         self.role = None
 
         self.setup_ui()
+
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -81,6 +87,7 @@ class SelectionDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
+
     def get_selection(self):
         subject = self.subject_combo.currentText()
         role_text = self.role_combo.currentText()
@@ -92,8 +99,12 @@ class SocketChatClient(QObject):
 
     message_received = Signal(str)
     status_changed = Signal(str)
+    question_received = Signal(str)
+    duel_request_received = Signal(str)
+    duel_score_received = Signal(int)
 
-    def __init__(self, host='localhost', port=5555):
+
+    def __init__(self, host=SERVER_HOST, port=SERVER_PORT):
         super().__init__()
         self.host = host
         self.port = port
@@ -101,6 +112,7 @@ class SocketChatClient(QObject):
         self.connected = False
         self.running = False
         self.registered = False
+
 
     def connect_to_server(self):
         try:
@@ -120,6 +132,7 @@ class SocketChatClient(QObject):
             print(f'\n[ERROR] Could not connect to server: {e}')
             self.status_changed.emit(f'Connection failed: {e}')
             return False
+
 
     def register_with_server(self, subject, role):
         if not self.running:
@@ -143,6 +156,7 @@ class SocketChatClient(QObject):
             self.status_changed.emit(f'Failed to register: {e}')
             return False
 
+
     def receive_messages(self):
         while self.running:
             try:
@@ -156,7 +170,7 @@ class SocketChatClient(QObject):
                     msg_dict = json.loads(message_str)
 
                     if 'type' not in msg_dict:
-                        print(f'[WARNING] Invalid message format: missing \'type\' field')
+                        print(f'[WARNING] Invalid message format: missing type field')
                         continue
 
                     msg_type = msg_dict.get('type')
@@ -167,6 +181,12 @@ class SocketChatClient(QObject):
                         self.handle_chat_message(msg_dict)
                     elif msg_type == MessageType.SYSTEM.value:
                         self.handle_system_message(msg_dict)
+                    elif msg_type == MessageType.QUESTION.value:
+                        self.handle_question_message(msg_dict)
+                    elif msg_type == MessageType.DUEL_REQUEST.value:
+                        self.handle_duel_request(msg_dict)
+                    elif msg_type == MessageType.DUEL_SCORE.value:
+                        self.handle_duel_score(msg_dict)
                     else:
                         print(f'[WARNING] Unknown message type: {msg_type}')
 
@@ -182,6 +202,7 @@ class SocketChatClient(QObject):
         if self.running:
             self.handle_disconnection()
 
+
     def handle_status_message(self, msg_dict):
         status_code = msg_dict.get('status', 'unknown')
         status_msg = msg_dict.get('message', 'Status update')
@@ -196,6 +217,7 @@ class SocketChatClient(QObject):
         elif status_code == 'disconnected':
             self.connected = False
 
+
     def handle_chat_message(self, msg_dict):
         content = msg_dict.get('content', '')
         sender = msg_dict.get('sender', 'Partner')
@@ -204,10 +226,30 @@ class SocketChatClient(QObject):
         print(f'[{timestamp}] {sender}: {content}')
         self.message_received.emit(content)
 
+
     def handle_system_message(self, msg_dict):
         system_msg = msg_dict.get('message', 'System message')
         print(f'\n[SYSTEM] {system_msg}')
         self.status_changed.emit(f'System: {system_msg}')
+
+
+    def handle_question_message(self, msg_dict):
+        question = msg_dict.get('content', '')
+        print(f'\n[QUESTION GENERATED] {question}')
+        self.question_received.emit(question)
+
+
+    def handle_duel_request(self, msg_dict):
+        question = msg_dict.get('question', '')
+        print(f'\n[DUEL REQUEST] {question}')
+        self.duel_request_received.emit(question)
+
+
+    def handle_duel_score(self, msg_dict):
+        score = msg_dict.get('score', 0)
+        print(f'\n[PARTNER DUEL SCORE] {score}/10')
+        self.duel_score_received.emit(score)
+
 
     def send_message(self, message):
         if not self.registered:
@@ -237,10 +279,88 @@ class SocketChatClient(QObject):
                 return False
         return False
 
+
+    def send_question(self, question):
+        if not self.registered:
+            print('[INFO] Cannot send question. Not registered yet.')
+            return False
+
+        if not self.connected:
+            print('[INFO] Cannot send question. Not connected to a partner yet.')
+            return False
+
+        if question:
+            try:
+                question_message = {
+                    'type': MessageType.QUESTION.value,
+                    'content': question
+                }
+                message_json = json.dumps(question_message)
+                self.client_socket.send(message_json.encode('utf-8'))
+                print(f'[QUESTION SENT] {question}')
+                return True
+            except Exception as e:
+                print(f'[ERROR] Failed to send question: {e}')
+                self.status_changed.emit(f'Failed to send question: {e}')
+                return False
+        return False
+
+
+    def send_duel_request(self, question):
+        if not self.registered:
+            print('[INFO] Cannot send duel request. Not registered yet.')
+            return False
+
+        if not self.connected:
+            print('[INFO] Cannot send duel request. Not connected to a partner yet.')
+            return False
+
+        if question:
+            try:
+                duel_message = {
+                    'type': MessageType.DUEL_REQUEST.value,
+                    'question': question
+                }
+                message_json = json.dumps(duel_message)
+                self.client_socket.send(message_json.encode('utf-8'))
+                print(f'[DUEL REQUEST SENT] {question}')
+                return True
+            except Exception as e:
+                print(f'[ERROR] Failed to send duel request: {e}')
+                self.status_changed.emit(f'Failed to send duel request: {e}')
+                return False
+        return False
+
+
+    def send_duel_score(self, score):
+        if not self.registered:
+            print('[INFO] Cannot send duel score. Not registered yet.')
+            return False
+
+        if not self.connected:
+            print('[INFO] Cannot send duel score. Not connected to a partner yet.')
+            return False
+
+        try:
+            score_message = {
+                'type': MessageType.DUEL_SCORE.value,
+                'score': score
+            }
+            message_json = json.dumps(score_message)
+            self.client_socket.send(message_json.encode('utf-8'))
+            print(f'[DUEL SCORE SENT] {score}/10')
+            return True
+        except Exception as e:
+            print(f'[ERROR] Failed to send duel score: {e}')
+            self.status_changed.emit(f'Failed to send duel score: {e}')
+            return False
+
+
     def handle_disconnection(self):
         print('\n[STATUS] Disconnected from server')
         self.status_changed.emit('Disconnected from server')
         self.running = False
+
 
     def disconnect_server(self):
         self.running = False
@@ -258,6 +378,7 @@ class PeerTutoringChatWidget(ChatWidget):
         self.socket_client = socket_client
         self.setWindowTitle('Peer Tutoring Chat')
 
+
     def on_send_clicked(self):
         text = self.message_input.text().strip()
         if text:
@@ -268,12 +389,12 @@ class PeerTutoringChatWidget(ChatWidget):
 
 class ChatWindow(QMainWindow):
 
-    def __init__(self, host='localhost', port=5555):
+    def __init__(self):
         super().__init__()
         self.setWindowTitle('Peer Tutoring App')
         self.setGeometry(100, 100, 800, 600)
 
-        self.socket_client = SocketChatClient(host, port)
+        self.socket_client = SocketChatClient()
 
         self.chat_widget = PeerTutoringChatWidget(self.socket_client)
         self.setCentralWidget(self.chat_widget)
@@ -282,9 +403,18 @@ class ChatWindow(QMainWindow):
 
         self.show_selection_dialog()
 
+
     def setup_connections(self):
         self.socket_client.message_received.connect(self.handle_socket_message)
         self.socket_client.status_changed.connect(self.handle_status_change)
+        self.socket_client.question_received.connect(self.handle_question_received)
+        self.chat_widget.question_generated.connect(self.handle_question_generated)
+
+        self.chat_widget.duel_requested.connect(self.handle_duel_requested)
+        self.chat_widget.duel_answer_submitted.connect(self.handle_duel_answer_submitted)
+        self.socket_client.duel_request_received.connect(self.handle_duel_request_received)
+        self.socket_client.duel_score_received.connect(self.handle_duel_score_received)
+
 
     def show_selection_dialog(self):
         dialog = SelectionDialog(self)
@@ -304,18 +434,77 @@ class ChatWindow(QMainWindow):
             print('User cancelled selection')
             QTimer.singleShot(100, self.close)
 
+
     def connect_to_server_async(self):
         if not self.socket_client.connect_to_server():
             print('Failed to connect to server. Please make sure the server is running.')
 
+
     def register_with_selection(self, subject, role):
         self.socket_client.register_with_server(subject, role)
+
 
     def handle_socket_message(self, message):
         self.chat_widget.send_partner_message(message)
 
+
     def handle_status_change(self, status):
         self.chat_widget.send_status(status)
+        self.chat_widget.set_partner_connected(self.socket_client.connected)
+
+
+    def handle_question_generated(self, question):
+        if self.socket_client.send_question(question):
+            self.chat_widget.send_ai_message(question)
+
+
+    def handle_question_received(self, question):
+        self.chat_widget.send_ai_message(question)
+
+
+    def handle_duel_requested(self, topic):
+        worker = QuestionGeneratorWorker(topic)
+        worker.finished.connect(self._on_duel_question_generated)
+
+        thread = threading.Thread(target=worker.run, daemon=True)
+        thread.start()
+
+
+    def _on_duel_question_generated(self, question):
+        self.chat_widget.enable_duel_button()
+
+        if question.startswith('Error:'):
+            self.chat_widget.send_status(question)
+        else:
+            if self.socket_client.send_duel_request(question):
+                self.chat_widget.show_duel_dialog(question)
+
+
+    def handle_duel_request_received(self, question):
+        self.chat_widget.send_status('Duel challenge received!')
+        self.chat_widget.show_duel_dialog(question)
+
+
+    def handle_duel_answer_submitted(self, question, answer):
+        worker = AnswerEvaluatorWorker(question, answer)
+        worker.finished.connect(self._on_duel_answer_evaluated)
+
+        thread = threading.Thread(target=worker.run, daemon=True)
+        thread.start()
+
+
+    def _on_duel_answer_evaluated(self, result):
+        score = result.get('score', 0)
+        feedback = result.get('feedback', '')
+
+        self.chat_widget.display_duel_score(score, feedback)
+
+        self.socket_client.send_duel_score(score)
+
+
+    def handle_duel_score_received(self, partner_score):
+        self.chat_widget.display_partner_duel_score(partner_score)
+
 
     def closeEvent(self, event):
         self.socket_client.disconnect_server()
@@ -327,10 +516,7 @@ def main():
 
     app.setStyleSheet(style.get_stylesheet())
 
-    HOST = 'localhost'
-    PORT = 5555
-
-    window = ChatWindow(HOST, PORT)
+    window = ChatWindow()
     window.show()
 
     sys.exit(app.exec())

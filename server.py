@@ -1,3 +1,5 @@
+from config import SERVER_HOST, SERVER_PORT
+
 import json
 import socket
 import threading
@@ -9,10 +11,14 @@ class MessageType(Enum):
     STATUS = 'status'
     SYSTEM = 'system'
     REGISTER = 'register'
+    QUESTION = 'question'
+    DUEL_REQUEST = 'duel_request'
+    DUEL_SCORE = 'duel_score'
 
 
 class ChatServer:
-    def __init__(self, host='localhost', port=5555):
+
+    def __init__(self, host=SERVER_HOST, port=SERVER_PORT):
         self.host = host
         self.port = port
 
@@ -24,6 +30,7 @@ class ChatServer:
         self.waiting_clients = {}
         self.client_info = {}
         self.active_pairs = []
+
 
     def start(self):
         self.server_socket.bind((self.host, self.port))
@@ -42,6 +49,7 @@ class ChatServer:
 
             client_thread.start()
 
+
     def handle_client(self, client_socket, address):
         try:
             registered = False
@@ -56,7 +64,7 @@ class ChatServer:
                     message_dict = json.loads(data.decode('utf-8'))
 
                     if 'type' not in message_dict:
-                        print(f"Invalid message format from {address}: missing 'type' field")
+                        print(f'Invalid message format from {address}: missing type field')
                         continue
 
                     msg_type = message_dict.get('type')
@@ -113,6 +121,48 @@ class ChatServer:
                             except:
                                 print('Failed to send message to partner')
                                 break
+
+                    elif msg_type == MessageType.QUESTION.value:
+                        if not registered:
+                            print(f'Client {address} tried to send question without registering')
+                            continue
+
+                        partner = self.find_partner(client_socket)
+                        if partner:
+                            try:
+                                partner.send(data)
+                                print(f'Question forwarded to partner')
+                            except:
+                                print('Failed to send question to partner')
+                                break
+
+                    elif msg_type == MessageType.DUEL_REQUEST.value:
+                        if not registered:
+                            print(f'Client {address} tried to send duel request without registering')
+                            continue
+
+                        partner = self.find_partner(client_socket)
+                        if partner:
+                            try:
+                                partner.send(data)
+                                print(f'Duel request forwarded to partner')
+                            except:
+                                print('Failed to send duel request to partner')
+                                break
+
+                    elif msg_type == MessageType.DUEL_SCORE.value:
+                        if not registered:
+                            print(f'Client {address} tried to send duel score without registering')
+                            continue
+
+                        partner = self.find_partner(client_socket)
+                        if partner:
+                            try:
+                                partner.send(data)
+                                print(f'Duel score forwarded to partner')
+                            except:
+                                print('Failed to send duel score to partner')
+                                break
                     else:
                         print(f'Ignoring message type: {msg_type}')
 
@@ -132,11 +182,15 @@ class ChatServer:
 
             print(f'Client {address} disconnected')
 
+
     def find_partner(self, client_socket):
         for pair in self.active_pairs:
-            if pair[0] == client_socket: return pair[1]
-            elif pair[1] == client_socket: return pair[0]
+            if pair[0] == client_socket:
+                return pair[1]
+            elif pair[1] == client_socket:
+                return pair[0]
         return None
+
 
     def disconnect_client(self, client_socket):
         with self.lock:
@@ -161,12 +215,14 @@ class ChatServer:
 
                 self.active_pairs = [pair for pair in self.active_pairs if client_socket not in pair]
 
+
     def send_message(self, client_socket, message_dict):
         try:
             message = json.dumps(message_dict)
             client_socket.send(message.encode('utf-8'))
         except Exception as e:
             print(f'Error sending message: {e}')
+
 
     def send_status(self, client_socket, status_code, message):
         status_message = {
@@ -175,6 +231,7 @@ class ChatServer:
             'message': message
         }
         self.send_message(client_socket, status_message)
+
 
     def send_chat(self, client_socket, content, sender=None):
         chat_message = {

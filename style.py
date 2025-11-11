@@ -90,6 +90,20 @@ QDialogButtonBox QPushButton:pressed {
     background-color: #d0d0d0;
 }
 
+/* Text Edit in Dialogs */
+QTextEdit {
+    background-color: #3a3a3a;
+    color: #ffffff;
+    border: 2px solid #4a4a4a;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+}
+
+QTextEdit:focus {
+    border: 2px solid #6a6a6a;
+}
+
 
 /* ==================== Chat Widget ==================== */
 
@@ -154,7 +168,7 @@ QPushButton#sendButton {
     background-color: #ffffff;
     color: #1a1a1a;
     border: none;
-    border-radius: 20px;
+    border-radius: 5px;
     padding: 10px 25px;
     font-weight: bold;
     font-size: 14px;
@@ -166,6 +180,159 @@ QPushButton#sendButton:hover {
 
 QPushButton#sendButton:pressed {
     background-color: #d0d0d0;
+}
+
+/* Follow-Up Button */
+QPushButton#followUpButton {
+    background-color: transparent;
+    color: #ffffff;
+    border: 1px solid #6a6a6a;
+    border-radius: 5px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QPushButton#followUpButton:hover {
+    background-color: #3a3a3a;
+    border: 1px solid #8a8a8a;
+    color: #ffffff;
+}
+
+QPushButton#followUpButton:pressed {
+    background-color: #4a4a4a;
+    border: 1px solid #9a9a9a;
+}
+
+
+/* ==================== Sidebar ==================== */
+
+QFrame#sidebar {
+    background-color: #2a2a2a;
+    border-left: 1px solid #3a3a3a;
+}
+
+QLabel#sidebarTitle {
+    font-size: 16px;
+    font-weight: bold;
+    color: #ffffff;
+    padding: 10px 0px;
+    background-color: transparent;
+}
+
+QPushButton#generateQuestionButton {
+    background-color: #3a3a3a;
+    color: #ffffff;
+    border: 2px solid #4a4a4a;
+    border-radius: 8px;
+    padding: 12px 15px;
+    font-weight: bold;
+    font-size: 13px;
+    text-align: center;
+}
+
+QPushButton#generateQuestionButton:hover {
+    background-color: #4a4a4a;
+    border: 2px solid #6a6a6a;
+}
+
+QPushButton#generateQuestionButton:pressed {
+    background-color: #5a5a5a;
+}
+
+QPushButton#generateQuestionButton:disabled {
+    background-color: #2a2a2a;
+    color: #5a5a5a;
+    border: 2px solid #3a3a3a;
+}
+
+QPushButton#duelButton {
+    background-color: #3a3a3a;
+    color: #ffffff;
+    border: 2px solid #4a4a4a;
+    border-radius: 8px;
+    padding: 12px 15px;
+    font-weight: bold;
+    font-size: 13px;
+    text-align: center;
+}
+
+QPushButton#duelButton:hover {
+    background-color: #4a4a4a;
+    border: 2px solid #6a6a6a;
+}
+
+QPushButton#duelButton:pressed {
+    background-color: #5a5a5a;
+}
+
+QPushButton#duelButton:disabled {
+    background-color: #2a2a2a;
+    color: #5a5a5a;
+    border: 2px solid #3a3a3a;
+}
+
+
+/* ==================== Duel Dialog ==================== */
+
+QLabel#duelTitle {
+    font-size: 20px;
+    font-weight: bold;
+    color: #ffffff;
+    padding: 10px;
+    background-color: transparent;
+}
+
+QLabel#duelQuestionLabel, QLabel#duelAnswerLabel {
+    font-size: 13px;
+    color: #ffffff;
+    font-weight: bold;
+    background-color: transparent;
+}
+
+QLabel#duelQuestionText {
+    font-size: 14px;
+    color: #ffffff;
+    background-color: #3a3a3a;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #4a4a4a;
+}
+
+QTextEdit#duelAnswerInput {
+    background-color: #3a3a3a;
+    color: #ffffff;
+    border: 2px solid #4a4a4a;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+}
+
+QTextEdit#duelAnswerInput:focus {
+    border: 2px solid #6a6a6a;
+}
+
+QTextEdit#duelAnswerInput:disabled {
+    background-color: #2a2a2a;
+    color: #6a6a6a;
+}
+
+QLabel#duelStatusLabel {
+    font-size: 13px;
+    color: #888888;
+    font-style: italic;
+    padding: 5px;
+    background-color: transparent;
+}
+
+QLabel#duelScoreLabel {
+    font-size: 14px;
+    color: #ffffff;
+    background-color: #3a3a3a;
+    padding: 15px;
+    border-radius: 8px;
+    border: 2px solid #4a4a4a;
+    font-weight: bold;
 }
 
 
