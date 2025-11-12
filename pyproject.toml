@@ -1,7 +1,7 @@
 [project]
-name = "tutorapp"
+name = "tutorme"
 version = "0.1.0"
-description = "Add your description here"
+description = "TutorMe - A peer-to-peer tutoring application with AI-powered features"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

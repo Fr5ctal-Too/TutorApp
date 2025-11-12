@@ -14,6 +14,7 @@ class MessageType(Enum):
     QUESTION = 'question'
     DUEL_REQUEST = 'duel_request'
     DUEL_SCORE = 'duel_score'
+    FILE_ATTACHMENT = 'file_attachment'
 
 
 class ChatServer:
@@ -55,7 +56,7 @@ class ChatServer:
             registered = False
 
             while True:
-                data = client_socket.recv(4096)
+                data = client_socket.recv(1048576 * 256)  # 256MB buffer for file attachments
 
                 if not data:
                     break
@@ -162,6 +163,21 @@ class ChatServer:
                                 print(f'Duel score forwarded to partner')
                             except:
                                 print('Failed to send duel score to partner')
+                                break
+
+                    elif msg_type == MessageType.FILE_ATTACHMENT.value:
+                        if not registered:
+                            print(f'Client {address} tried to send file without registering')
+                            continue
+
+                        partner = self.find_partner(client_socket)
+                        if partner:
+                            try:
+                                partner.send(data)
+                                filename = message_dict.get('filename', 'file')
+                                print(f'File attachment "{filename}" forwarded to partner')
+                            except:
+                                print('Failed to send file attachment to partner')
                                 break
                     else:
                         print(f'Ignoring message type: {msg_type}')

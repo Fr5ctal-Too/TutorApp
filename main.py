@@ -1,5 +1,5 @@
 def main():
-    print("Hello from tutorapp!")
+    print("Hello from TutorMe!")
 
 
 if __name__ == "__main__":

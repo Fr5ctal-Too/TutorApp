@@ -26,16 +26,16 @@ def follow_up(history):
     if len(history) > 5:
         history = history[-5:]
 
-    prompt = 'Generate stricly one follow-up question with nothing else based on this conversation. There is no need to repeat the question or do any evaluation of the conversation. \n\nConversation History:\n'
+    prompt = 'Strictly predict what the user will ASK next based on this conversation. Do not repeat or evaluate the question. Just give the answer. \n\nConversation History:\n'
 
     for msg, sender in history:
         if sender == 'own':
-            prompt += f'You: {msg}\n'
+            prompt += f'User: {msg}\n'
         elif sender == 'partner':
             prompt += f'Partner: {msg}\n'
         elif sender == 'ai':
             prompt += f'AI: {msg}\n'
 
-    prompt += '\nOnly the Follow-up Response/Question and nothing else:'
+    prompt += '\nUser\'s question:'
 
     return query(prompt)

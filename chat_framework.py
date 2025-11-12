@@ -1,9 +1,10 @@
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
-                               QLabel, QLineEdit, QPushButton, QFrame, QSpacerItem,
-                               QSizePolicy, QGraphicsOpacityEffect, QDialog, QTextEdit)
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Property, QPoint, Signal, QObject
-from PySide6.QtGui import QFont
+from utils import get_resource_path
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QLabel, QLineEdit, QPushButton, QFrame, QGraphicsOpacityEffect, QDialog, QTextEdit, QFileDialog
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Signal, QObject
+from PySide6.QtGui import QIcon
 import threading
+import base64
+import os
 
 from chatbot.follow_up import follow_up
 from chatbot.question_gen import generate_question
@@ -227,6 +228,103 @@ class DuelDialog(QDialog):
             self.close_button.setEnabled(True)
 
 
+class FileBubble(QFrame):
+
+    download_clicked = Signal(dict)
+
+    def __init__(self, filename, is_own=True, file_data=None, parent=None):
+        super().__init__(parent)
+        self.filename = filename
+        self.is_own = is_own
+        self.file_data = file_data
+
+        self.setup_ui()
+
+        self.opacity_effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.opacity_effect)
+
+        self.animate_in()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 12, 15, 12)
+        layout.setSpacing(10)
+
+        # File icon and name
+        file_info_layout = QHBoxLayout()
+        file_info_layout.setSpacing(10)
+
+        # File icon
+        icon_label = QLabel('📄')
+        icon_label.setStyleSheet('font-size: 24px; background-color: transparent;')
+        file_info_layout.addWidget(icon_label)
+
+        # File info container
+        file_text_layout = QVBoxLayout()
+        file_text_layout.setSpacing(2)
+
+        # Filename
+        file_label = QLabel(self.filename)
+        file_label.setWordWrap(True)
+        file_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        if self.is_own:
+            file_label.setStyleSheet('font-weight: bold; font-size: 14px; background-color: transparent; color: #1a1a1a;')
+        else:
+            file_label.setStyleSheet('font-weight: bold; font-size: 14px; background-color: transparent; color: #ffffff;')
+        file_text_layout.addWidget(file_label)
+
+        # File size info
+        if self.file_data:
+            size_bytes = self.file_data.get('size', 0)
+            size_kb = size_bytes / 1024
+            if size_kb < 1024:
+                size_str = f'{size_kb:.1f} KB'
+            else:
+                size_mb = size_kb / 1024
+                size_str = f'{size_mb:.1f} MB'
+
+            size_label = QLabel(size_str)
+            size_label.setStyleSheet('font-size: 11px; background-color: transparent; color: #888888;')
+            file_text_layout.addWidget(size_label)
+
+        file_info_layout.addLayout(file_text_layout)
+        file_info_layout.addStretch()
+
+        layout.addLayout(file_info_layout)
+
+        # Download button for received files
+        if not self.is_own and self.file_data:
+            self.download_button = QPushButton()
+            self.download_button.setObjectName('downloadButton')
+            self.download_button.setIcon(QIcon(get_resource_path('assets/download.svg')))
+            self.download_button.setCursor(Qt.PointingHandCursor)
+            self.download_button.clicked.connect(lambda: self.download_clicked.emit(self.file_data))
+            layout.addWidget(self.download_button)
+        elif self.is_own:
+            # Sent indicator for own files
+            sent_label = QLabel('Sent')
+            sent_label.setStyleSheet('font-size: 11px; background-color: transparent; color: #666666; font-style: italic;')
+            sent_label.setAlignment(Qt.AlignRight)
+            layout.addWidget(sent_label)
+
+        if self.is_own:
+            self.setObjectName('ownBubble')
+        else:
+            self.setObjectName('partnerBubble')
+
+        self.setMinimumWidth(320)
+        self.setMaximumWidth(500)
+
+    def animate_in(self):
+        self.fade_anim = QPropertyAnimation(self.opacity_effect, b'opacity')
+        self.fade_anim.setDuration(400)
+        self.fade_anim.setStartValue(0.0)
+        self.fade_anim.setEndValue(1.0)
+        self.fade_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self.fade_anim.finished.connect(lambda: self.setGraphicsEffect(None))
+        self.fade_anim.start()
+
+
 class MessageBubble(QFrame):
 
     def __init__(self, text, bubble_type='own', parent=None):
@@ -267,7 +365,6 @@ class MessageBubble(QFrame):
             self.label.setAlignment(Qt.AlignCenter)
 
         layout.addWidget(self.label)
-        self.setMinimumWidth(400)
         self.setMaximumWidth(700)
 
 
@@ -286,6 +383,7 @@ class ChatWidget(QWidget):
     question_generated = Signal(str)
     duel_requested = Signal(str)
     duel_answer_submitted = Signal(str, str)
+    file_attachment_selected = Signal(str)
 
 
     def __init__(self, parent=None):
@@ -344,18 +442,26 @@ class ChatWidget(QWidget):
         self.message_input.setPlaceholderText('Type a message...')
         self.message_input.returnPressed.connect(self.on_send_clicked)
 
-        self.send_button = QPushButton('Send')
+        self.attach_button = QPushButton()
+        self.attach_button.setIcon(QIcon(get_resource_path('assets/upload.svg')))
+        self.attach_button.setObjectName('attachButton')
+        self.attach_button.clicked.connect(self.on_attach_clicked)
+        self.attach_button.setCursor(Qt.PointingHandCursor)
+        self.attach_button.setToolTip('Attach file')
+
+        self.send_button = QPushButton()
+        self.send_button.setIcon(QIcon(get_resource_path('assets/send.svg')))
         self.send_button.setObjectName('sendButton')
         self.send_button.clicked.connect(self.on_send_clicked)
         self.send_button.setCursor(Qt.PointingHandCursor)
 
         input_layout.addWidget(self.message_input)
+        input_layout.addWidget(self.attach_button)
         input_layout.addWidget(self.send_button)
 
         self.follow_up_button = QPushButton('Follow-ups will appear here')
         self.follow_up_button.setObjectName('followUpButton')
         self.follow_up_button.clicked.connect(lambda: self.message_input.setText(self.follow_up_button.text()))
-        self.follow_up_button.clicked.connect(lambda: self.update())
 
         input_v_layout.addWidget(self.follow_up_button)
 
@@ -378,6 +484,7 @@ class ChatWidget(QWidget):
 
         self.generate_question_button = QPushButton('Generate Question')
         self.generate_question_button.setObjectName('generateQuestionButton')
+        self.generate_question_button.setIcon(QIcon(get_resource_path('assets/generate.svg')))
         self.generate_question_button.clicked.connect(self.on_generate_question_clicked)
         self.generate_question_button.setEnabled(False)
         self.generate_question_button.setCursor(Qt.PointingHandCursor)
@@ -385,6 +492,7 @@ class ChatWidget(QWidget):
 
         self.duel_button = QPushButton('Duel')
         self.duel_button.setObjectName('duelButton')
+        self.duel_button.setIcon(QIcon(get_resource_path('assets/duel.svg')))
         self.duel_button.clicked.connect(self.on_duel_clicked)
         self.duel_button.setEnabled(False)
         self.duel_button.setCursor(Qt.PointingHandCursor)
@@ -426,6 +534,7 @@ class ChatWidget(QWidget):
         self.scroll_to_bottom()
 
         self.messages.append([text, 'partner'])
+        self.generate_follow_up()
 
 
     def send_status(self, text):
@@ -457,6 +566,49 @@ class ChatWidget(QWidget):
         self.scroll_to_bottom()
 
         self.messages.append([text, 'ai'])
+        self.generate_follow_up()
+
+
+    def send_file_message(self, filename, is_own, file_data=None):
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        if is_own:
+            layout.addStretch()
+
+        file_bubble = FileBubble(filename, is_own, file_data)
+        if not is_own:
+            file_bubble.download_clicked.connect(self.on_file_download_clicked)
+
+        layout.addWidget(file_bubble)
+
+        if not is_own:
+            layout.addStretch()
+
+        self.message_layout.insertWidget(self.message_layout.count() - 1, container)
+        self.scroll_to_bottom()
+
+
+    def on_file_download_clicked(self, file_data):
+        filename = file_data.get('filename', 'download')
+        encoded_data = file_data.get('data', '')
+
+        save_path, _ = QFileDialog.getSaveFileName(
+            self,
+            'Save File',
+            filename,
+            'All Files (*.*)'
+        )
+
+        if save_path:
+            try:
+                file_bytes = base64.b64decode(encoded_data)
+                with open(save_path, 'wb') as f:
+                    f.write(file_bytes)
+                self.send_status(f'File saved: {os.path.basename(save_path)}')
+            except Exception as e:
+                self.send_status(f'Error saving file: {str(e)}')
 
 
     def on_send_clicked(self):
@@ -464,6 +616,17 @@ class ChatWidget(QWidget):
         if text:
             self.send_own_message(text)
             self.message_input.clear()
+
+
+    def on_attach_clicked(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            'Select File to Attach',
+            '',
+            'All Files (*.*)'
+        )
+        if file_path:
+            self.file_attachment_selected.emit(file_path)
 
 
     def generate_follow_up(self):

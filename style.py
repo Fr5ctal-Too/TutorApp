@@ -163,6 +163,25 @@ QLineEdit#messageInput:focus {
     border: 2px solid #ffffff;
 }
 
+/* Upload/Attach Button */
+QPushButton#attachButton {
+    background-color: #4a7c59;
+    color: #ffffff;
+    border: none;
+    border-radius: 5px;
+    padding: 10px 20px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+QPushButton#attachButton:hover {
+    background-color: #5a8d6a;
+}
+
+QPushButton#attachButton:pressed {
+    background-color: #3a6b49;
+}
+
 /* Send Button */
 QPushButton#sendButton {
     background-color: #ffffff;
@@ -184,24 +203,21 @@ QPushButton#sendButton:pressed {
 
 /* Follow-Up Button */
 QPushButton#followUpButton {
-    background-color: transparent;
-    color: #ffffff;
-    border: 1px solid #6a6a6a;
+    background-color: #ffffff;
+    color: #1a1a1a;
+    border: none;
     border-radius: 5px;
-    padding: 3px 10px;
+    padding: 10px 25px;
     font-size: 12px;
     font-weight: 500;
 }
 
 QPushButton#followUpButton:hover {
-    background-color: #3a3a3a;
-    border: 1px solid #8a8a8a;
-    color: #ffffff;
+    background-color: #e0e0e0;
 }
 
 QPushButton#followUpButton:pressed {
-    background-color: #4a4a4a;
-    border: 1px solid #9a9a9a;
+    background-color: #d0d0d0;
 }
 
 
@@ -391,6 +407,45 @@ QLabel#statusText {
     font-size: 12px;
     padding: 3px 10px;
     background-color: transparent;
+}
+
+
+/* ==================== File Attachment Bubbles ==================== */
+
+/* File Bubble - Own */
+QFrame#ownBubble QLabel {
+    color: #1a1a1a;
+    padding: 5px;
+    background-color: transparent;
+    font-size: 14px;
+}
+
+/* File Bubble - Partner */
+QFrame#partnerBubble QLabel {
+    color: #ffffff;
+    padding: 5px;
+    background-color: transparent;
+    font-size: 14px;
+}
+
+/* Download Button */
+QPushButton#downloadButton {
+    background-color: #3b82f6;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-weight: bold;
+    font-size: 13px;
+    margin-top: 5px;
+}
+
+QPushButton#downloadButton:hover {
+    background-color: #2563eb;
+}
+
+QPushButton#downloadButton:pressed {
+    background-color: #1d4ed8;
 }
 '''
 

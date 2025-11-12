@@ -4,14 +4,13 @@ import sys
 import socket
 import threading
 import json
+import base64
+import os
 from datetime import datetime
 from enum import Enum
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QDialog, QVBoxLayout,
-                               QHBoxLayout, QLabel, QPushButton, QComboBox,
-                               QWidget, QDialogButtonBox)
-from PySide6.QtCore import QObject, Signal, Slot, QTimer, Qt
-from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QApplication, QMainWindow, QDialog, QVBoxLayout, QLabel, QComboBox, QDialogButtonBox
+from PySide6.QtCore import QObject, Signal, QTimer, Qt
 
 from chat_framework import ChatWidget, QuestionGeneratorWorker, AnswerEvaluatorWorker
 import style
@@ -25,13 +24,14 @@ class MessageType(Enum):
     QUESTION = 'question'
     DUEL_REQUEST = 'duel_request'
     DUEL_SCORE = 'duel_score'
+    FILE_ATTACHMENT = 'file_attachment'
 
 
 class SelectionDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle('Peer Tutoring - Select Subject & Role')
+        self.setWindowTitle('TutorMe - Select Subject & Role')
         self.setModal(True)
         self.setMinimumWidth(400)
 
@@ -46,7 +46,7 @@ class SelectionDialog(QDialog):
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        title = QLabel('Welcome to Peer Tutoring')
+        title = QLabel('Welcome to TutorMe')
         title.setObjectName('dialogTitle')
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
@@ -102,6 +102,7 @@ class SocketChatClient(QObject):
     question_received = Signal(str)
     duel_request_received = Signal(str)
     duel_score_received = Signal(int)
+    file_received = Signal(dict)
 
 
     def __init__(self, host=SERVER_HOST, port=SERVER_PORT):
@@ -160,7 +161,7 @@ class SocketChatClient(QObject):
     def receive_messages(self):
         while self.running:
             try:
-                data = self.client_socket.recv(4096)
+                data = self.client_socket.recv(1048576 * 256)  # 256MB buffer for file attachments
                 if not data:
                     break
 
@@ -187,6 +188,8 @@ class SocketChatClient(QObject):
                         self.handle_duel_request(msg_dict)
                     elif msg_type == MessageType.DUEL_SCORE.value:
                         self.handle_duel_score(msg_dict)
+                    elif msg_type == MessageType.FILE_ATTACHMENT.value:
+                        self.handle_file_attachment(msg_dict)
                     else:
                         print(f'[WARNING] Unknown message type: {msg_type}')
 
@@ -249,6 +252,14 @@ class SocketChatClient(QObject):
         score = msg_dict.get('score', 0)
         print(f'\n[PARTNER DUEL SCORE] {score}/10')
         self.duel_score_received.emit(score)
+
+
+    def handle_file_attachment(self, msg_dict):
+        filename = msg_dict.get('filename', 'unknown')
+        file_data = msg_dict.get('data', '')
+        file_size = msg_dict.get('size', 0)
+        print(f'\n[FILE RECEIVED] {filename} ({file_size} bytes)')
+        self.file_received.emit({'filename': filename, 'data': file_data, 'size': file_size})
 
 
     def send_message(self, message):
@@ -356,6 +367,47 @@ class SocketChatClient(QObject):
             return False
 
 
+    def send_file(self, file_path):
+        if not self.registered:
+            print('[INFO] Cannot send file. Not registered yet.')
+            return False
+
+        if not self.connected:
+            print('[INFO] Cannot send file. Not connected to a partner yet.')
+            self.status_changed.emit('Cannot send file. Not connected to a partner yet.')
+            return False
+
+        try:
+            # Check file size (limit to 5MB)
+            file_size = os.path.getsize(file_path)
+            if file_size > 5 * 1024 * 1024:
+                self.status_changed.emit('File too large. Maximum size is 5MB.')
+                return False
+
+            # Read and encode file
+            with open(file_path, 'rb') as f:
+                file_data = f.read()
+
+            encoded_data = base64.b64encode(file_data).decode('utf-8')
+            filename = os.path.basename(file_path)
+
+            file_message = {
+                'type': MessageType.FILE_ATTACHMENT.value,
+                'filename': filename,
+                'data': encoded_data,
+                'size': file_size
+            }
+            message_json = json.dumps(file_message)
+            self.client_socket.send(message_json.encode('utf-8'))
+
+            print(f'[FILE SENT] {filename} ({file_size} bytes)')
+            return True
+        except Exception as e:
+            print(f'[ERROR] Failed to send file: {e}')
+            self.status_changed.emit(f'Failed to send file: {e}')
+            return False
+
+
     def handle_disconnection(self):
         print('\n[STATUS] Disconnected from server')
         self.status_changed.emit('Disconnected from server')
@@ -371,12 +423,12 @@ class SocketChatClient(QObject):
                 pass
 
 
-class PeerTutoringChatWidget(ChatWidget):
+class TutorMeChatWidget(ChatWidget):
 
     def __init__(self, socket_client):
         super().__init__()
         self.socket_client = socket_client
-        self.setWindowTitle('Peer Tutoring Chat')
+        self.setWindowTitle('TutorMe Chat')
 
 
     def on_send_clicked(self):
@@ -391,12 +443,12 @@ class ChatWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('Peer Tutoring App')
+        self.setWindowTitle('TutorMe App')
         self.setGeometry(100, 100, 800, 600)
 
         self.socket_client = SocketChatClient()
 
-        self.chat_widget = PeerTutoringChatWidget(self.socket_client)
+        self.chat_widget = TutorMeChatWidget(self.socket_client)
         self.setCentralWidget(self.chat_widget)
 
         self.setup_connections()
@@ -414,6 +466,9 @@ class ChatWindow(QMainWindow):
         self.chat_widget.duel_answer_submitted.connect(self.handle_duel_answer_submitted)
         self.socket_client.duel_request_received.connect(self.handle_duel_request_received)
         self.socket_client.duel_score_received.connect(self.handle_duel_score_received)
+
+        self.chat_widget.file_attachment_selected.connect(self.handle_file_attachment_selected)
+        self.socket_client.file_received.connect(self.handle_file_received)
 
 
     def show_selection_dialog(self):
@@ -506,6 +561,18 @@ class ChatWindow(QMainWindow):
         self.chat_widget.display_partner_duel_score(partner_score)
 
 
+    def handle_file_attachment_selected(self, file_path):
+        if self.socket_client.send_file(file_path):
+            filename = os.path.basename(file_path)
+            file_size = os.path.getsize(file_path)
+            self.chat_widget.send_file_message(filename, True, {'filename': filename, 'size': file_size})
+
+
+    def handle_file_received(self, file_data):
+        filename = file_data.get('filename', 'unknown')
+        self.chat_widget.send_file_message(filename, False, file_data)
+
+
     def closeEvent(self, event):
         self.socket_client.disconnect_server()
         event.accept()
@@ -517,7 +584,7 @@ def main():
     app.setStyleSheet(style.get_stylesheet())
 
     window = ChatWindow()
-    window.show()
+    window.showMaximized()
 
     sys.exit(app.exec())
 
